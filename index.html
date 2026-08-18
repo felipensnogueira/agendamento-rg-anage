@@ -181,7 +181,7 @@ $("form").addEventListener("submit",async e=>{
  if(ag.some(x=>String(x.horario).slice(0,5)===h)){showAlert("Esse horário acabou de ser ocupado. Escolha outro.");await renderSlots();return}
  const cpf=$("cpf").value.replace(/\D/g,"");if(cpf.length!==11){showAlert("Informe um CPF válido com 11 números.");return}
  if(await cpfJaAgendado(cpf)){showAlert("Este CPF já possui um agendamento. Não é possível realizar um novo agendamento com o mesmo CPF.","err",true);return}
- const item={data:d,horario:h+":00",nome:$("nome").value.trim(),cpf:$("cpf").value,nascimento:$("nascimento").value,telefone:$("telefone").value,servico:$("servico").value};
+ const item={data:d,horario:h+":00",nome:$("nome").value.trim(),cpf:cpf,nascimento:$("nascimento").value,telefone:$("telefone").value,servico:$("servico").value};
  const {data:inserted,error}=await db.from('agendamentos_rg').insert(item).select().single();
  if(error){console.error(error);showAlert("Não foi possível salvar o agendamento. Tente novamente.");return}
  const saved=inserted||item;
