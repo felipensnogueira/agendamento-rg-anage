@@ -62,98 +62,25 @@ th{background:#f5f7fa}
   </div>
 </section>
 </main>
-<script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
 const USUARIO="Admin";
 const SENHA="Nimba@82";
 const LIMITE=12;
-
-function entrar(){
-  const u=document.getElementById("usuario").value;
-  const s=document.getElementById("senha").value;
-  const a=document.getElementById("loginAlert");
-  if(u===USUARIO && s===SENHA){
-    sessionStorage.setItem("admin_logado","1");
-    document.getElementById("login").classList.add("hidden");
-    document.getElementById("painel").classList.remove("hidden");
-    render();
-  }else{
-    a.textContent="Usuário ou senha incorretos.";
-    a.className="alert err";
-  }
-}
-function sair(){
-  sessionStorage.removeItem("admin_logado");
-  location.reload();
-}
-function getData(d){
-  try{return JSON.parse(localStorage.getItem("rg_agendamentos_"+d)||"[]")}catch(e){return []}
-}
-function allAppointments(){
-  const out=[];
-  for(let i=0;i<localStorage.length;i++){
-    const k=localStorage.key(i);
-    if(k && k.startsWith("rg_agendamentos_")){
-      const d=k.replace("rg_agendamentos_","");
-      getData(d).forEach(x=>out.push(x));
-    }
-  }
-  return out.sort((a,b)=>(a.data+a.horario).localeCompare(b.data+b.horario));
-}
-function fmtDate(s){
-  if(!s)return "";
-  const [y,m,d]=s.split("-");
-  return d+"/"+m+"/"+y;
-}
-function render(){
-  if(sessionStorage.getItem("admin_logado")!=="1")return;
-  const q=document.getElementById("filtro").value.toLowerCase().trim();
-  const df=document.getElementById("dataFiltro").value;
-  let arr=allAppointments().filter(x=>{
-    const text=((x.nome||"")+" "+(x.cpf||"")).toLowerCase();
-    return (!q||text.includes(q)) && (!df||x.data===df);
-  });
-  document.getElementById("resumo").textContent=arr.length+" agendamento(s) encontrado(s).";
-  document.getElementById("lista").innerHTML=arr.map(x=>`
-    <tr>
-      <td>${esc(x.nome)}</td><td>${esc(x.cpf)}</td><td>${fmtDate(x.nascimento)}</td>
-      <td>${esc(x.telefone)}</td><td>${esc(x.servico)}</td>
-      <td>${fmtDate(x.data)}</td><td>${x.horario||""}</td>
-      <td><button class="danger" onclick="excluir('${escAttr(x.data)}','${escAttr(x.id)}')">EXCLUIR</button></td>
-    </tr>`).join("") || '<tr><td colspan="8">Nenhum agendamento encontrado.</td></tr>';
-}
-function excluir(data,id){
-  if(!confirm("Excluir este agendamento?"))return;
-  const arr=getData(data).filter(x=>x.id!==id);
-  if(arr.length)localStorage.setItem("rg_agendamentos_"+data,JSON.stringify(arr));
-  else localStorage.removeItem("rg_agendamentos_"+data);
-  aviso("Agendamento excluído.","ok"); render();
-}
-function limparTudo(){
-  if(!confirm("ATENÇÃO: isso apagará todos os agendamentos salvos neste navegador. Continuar?"))return;
-  const keys=[];
-  for(let i=0;i<localStorage.length;i++){
-    const k=localStorage.key(i);
-    if(k && k.startsWith("rg_agendamentos_"))keys.push(k);
-  }
-  keys.forEach(k=>localStorage.removeItem(k));
-  aviso("Todos os agendamentos foram apagados.","ok"); render();
-}
-function limparFiltro(){
-  document.getElementById("filtro").value="";
-  document.getElementById("dataFiltro").value="";
-  render();
-}
-function aviso(msg,type){
-  const a=document.getElementById("alert");a.textContent=msg;a.className="alert "+type;
-  setTimeout(()=>a.className="alert",3500);
-}
-function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+const SUPABASE_URL="https://qqydiczvfbgvstqdlcez.supabase.co";
+const SUPABASE_KEY="sb_publishable_P9rqskqf7h8emdjFgH8mMg_z_cVP06l";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+function entrar(){const u=document.getElementById("usuario").value,s=document.getElementById("senha").value,a=document.getElementById("loginAlert");if(u===USUARIO&&s===SENHA){sessionStorage.setItem("admin_logado","1");document.getElementById("login").classList.add("hidden");document.getElementById("painel").classList.remove("hidden");render()}else{a.textContent="Usuário ou senha incorretos.";a.className="alert err"}}
+function sair(){sessionStorage.removeItem("admin_logado");location.reload()}
+async function allAppointments(){const {data,error}=await db.from('agendamentos_rg').select('*').order('data').order('horario');if(error){console.error(error);aviso('Erro ao carregar os agendamentos.','err');return []}return data||[]}
+function fmtDate(s){if(!s)return "";const[y,m,d]=s.split("-");return d+"/"+m+"/"+y}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
 function escAttr(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
-if(sessionStorage.getItem("admin_logado")==="1"){
-  document.getElementById("login").classList.add("hidden");
-  document.getElementById("painel").classList.remove("hidden");
-  render();
-}
+async function render(){if(sessionStorage.getItem("admin_logado")!=="1")return;const q=document.getElementById("filtro").value.toLowerCase().trim(),df=document.getElementById("dataFiltro").value;let arr=await allAppointments();arr=arr.filter(x=>{const text=((x.nome||"")+" "+(x.cpf||"")).toLowerCase();return(!q||text.includes(q))&&(!df||x.data===df)});document.getElementById("resumo").textContent=arr.length+" agendamento(s) encontrado(s).";document.getElementById("lista").innerHTML=arr.map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.cpf)}</td><td>${fmtDate(x.nascimento)}</td><td>${esc(x.telefone)}</td><td>${esc(x.servico)}</td><td>${fmtDate(x.data)}</td><td>${String(x.horario||"").slice(0,5)}</td><td><button class="danger" onclick="excluir('${escAttr(x.id)}')">EXCLUIR</button></td></tr>`).join("")||'<tr><td colspan="8">Nenhum agendamento encontrado.</td></tr>'}
+async function excluir(id){if(!confirm("Excluir este agendamento?"))return;const {error}=await db.from('agendamentos_rg').delete().eq('id',id);if(error){console.error(error);aviso('Não foi possível excluir.','err');return}aviso('Agendamento excluído.','ok');await render()}
+async function limparTudo(){if(!confirm("ATENÇÃO: isso apagará todos os agendamentos do banco. Continuar?"))return;const {error}=await db.from('agendamentos_rg').delete().not('id','is',null);if(error){console.error(error);aviso('Não foi possível apagar os agendamentos.','err');return}aviso('Todos os agendamentos foram apagados.','ok');await render()}
+function limparFiltro(){document.getElementById("filtro").value="";document.getElementById("dataFiltro").value="";render()}
+function aviso(msg,type){const a=document.getElementById("alert");a.textContent=msg;a.className="alert "+type;setTimeout(()=>a.className="alert",3500)}
+if(sessionStorage.getItem("admin_logado")==="1"){document.getElementById("login").classList.add("hidden");document.getElementById("painel").classList.remove("hidden");render()}
 </script>
 </body>
 </html>

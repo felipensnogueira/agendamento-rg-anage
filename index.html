@@ -139,53 +139,54 @@ th{background:#f3f8fa;color:var(--azul)}
     </section>
   </div>
 </main>
-<div class="footer">Prefeitura Municipal de Anagé — Sistema de Agendamento de RG<br><a href="admin_agendamentos.html" class="no-print" style="color:inherit;opacity:.8;font-size:12px;">Acesso do administrador</a></div><script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><div class="footer">Prefeitura Municipal de Anagé — Sistema de Agendamento de RG<br><a href="admin_agendamentos.html" class="no-print" style="color:inherit;opacity:.8;font-size:12px;">Acesso do administrador</a></div><script>
 const LIMITE=12;
 const horarios=["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","14:00","14:30","15:00","15:30","16:00","16:30"];
 const manha=horarios.slice(0,8),tarde=horarios.slice(8);
-const $=id=>document.getElementById(id),key=d=>"rg_agendamentos_"+d;
+const $=id=>document.getElementById(id);
+const SUPABASE_URL="https://qqydiczvfbgvstqdlcez.supabase.co";
+const SUPABASE_KEY="sb_publishable_P9rqskqf7h8emdjFgH8mMg_z_cVP06l";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 function hojeISO(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
 $("data").min=hojeISO();$("data").value=hojeISO();
-function getData(d){try{return JSON.parse(localStorage.getItem(key(d))||"[]")}catch(e){return[]}}
-function saveData(d,arr){localStorage.setItem(key(d),JSON.stringify(arr))}
-function cpfJaAgendado(cpf){
-  for(let i=0;i<localStorage.length;i++){
-    const k=localStorage.key(i);
-    if(!k || !k.startsWith("rg_agendamentos_")) continue;
-    try{
-      const lista=JSON.parse(localStorage.getItem(k)||"[]");
-      if(lista.some(x=>String(x.cpf||"").replace(/\D/g,"")===cpf)) return true;
-    }catch(e){}
-  }
-  return false;
+let cache=[];
+async function getData(d){
+  const {data,error}=await db.from('agendamentos_rg').select('*').eq('data',d).order('horario');
+  if(error){console.error(error);return cache.filter(x=>x.data===d)}
+  cache=cache.filter(x=>x.data!==d).concat(data||[]); return data||[];
 }
+async function allAppointments(){const {data,error}=await db.from('agendamentos_rg').select('*').order('data').order('horario');if(error){console.error(error);return []}return data||[]}
+async function cpfJaAgendado(cpf){const {data,error}=await db.from('agendamentos_rg').select('id').eq('cpf',cpf).limit(1);if(error){console.error(error);return false}return (data||[]).length>0}
 function formatDate(s){if(!s)return"";const[y,m,day]=s.split("-");return`${day}/${m}/${y}`}
-function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function escapeHTML(s){return String(s??"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function cpfFmt(v){v=v.replace(/\D/g,"").slice(0,11);return v.replace(/(\d{3})(\d)/,"$1.$2").replace(/(\d{3})(\d)/,"$1.$2").replace(/(\d{3})(\d{1,2})$/,"$1-$2")}
 function telFmt(v){v=v.replace(/\D/g,"").slice(0,11);if(v.length>10)return v.replace(/^(\d{2})(\d{5})(\d{1,4})$/,"($1) $2-$3");return v.replace(/^(\d{2})(\d{4})(\d{1,4})$/,"($1) $2-$3")}
 $("cpf").addEventListener("input",e=>e.target.value=cpfFmt(e.target.value));
 $("telefone").addEventListener("input",e=>e.target.value=telFmt(e.target.value));
-$("data").addEventListener("change",()=>{ $("horario").value=""; const d=$("data").value; if(d){const [y,m,day]=d.split("-").map(Number),dow=new Date(y,m-1,day).getDay(); if(dow===0||dow===6){showAlert("Os agendamentos funcionam somente de segunda a sexta-feira. Escolha um dia útil."); $("data").value=""; $("horario").value=""; $("slotsManha").innerHTML=""; $("slotsTarde").innerHTML=""; $("resumo").innerHTML=""; return;}} renderSlots() });
-function showAlert(msg,type="err",persist=false){ $("alert").textContent=msg;$("alert").className="alert show "+type;if(!persist)setTimeout(()=>{$("alert").className="alert"},4500)}
-function renderSlots(){
- const d=$("data").value,ag=getData(d),used=ag.length;$("contador").textContent=used+"/"+LIMITE;
+$("data").addEventListener("change",async()=>{ $("horario").value=""; const d=$("data").value; if(d){const [y,m,day]=d.split("-").map(Number),dow=new Date(y,m-1,day).getDay(); if(dow===0||dow===6){showAlert("Os agendamentos funcionam somente de segunda a sexta-feira. Escolha um dia útil."); $("data").value=""; $("horario").value=""; $("slotsManha").innerHTML=""; $("slotsTarde").innerHTML=""; $("resumo").innerHTML=""; return;}} await renderSlots() });
+function showAlert(msg,type="err",persist=false){ $("alert").textContent=msg;$("alert").className="alert show "+type;if(!persist)setTimeout(()=>$("alert").className="alert",4500)}
+async function renderSlots(){
+ const d=$("data").value; if(!d)return;
+ const ag=await getData(d),used=ag.length;$("contador").textContent=used+"/"+LIMITE;
  $("contador").style.color=used>=LIMITE?"var(--vermelho)":"var(--azul)";
- const ocupado=new Set(ag.map(x=>x.horario));
+ const ocupado=new Set(ag.map(x=>String(x.horario).slice(0,5)));
  function make(list){return list.map(h=>{const disabled=ocupado.has(h)||used>=LIMITE;return`<button type="button" class="slot ${disabled?"disabled":""} ${$("horario").value===h&&!disabled?"selected":""}" ${disabled?"disabled":""} onclick="selecionarHorario('${h}')">${h}</button>`}).join("")}
  $("slotsManha").innerHTML=make(manha);$("slotsTarde").innerHTML=make(tarde);
  $("resumo").innerHTML=`<p><b>${formatDate(d)}</b>: ${used} de ${LIMITE} vagas ocupadas.</p><p style="font-size:13px;color:var(--cinza)">Disponíveis: ${horarios.filter(h=>!ocupado.has(h)).length} horários, enquanto houver vagas no limite diário.</p>`;
 }
-function selecionarHorario(h){const ag=getData($("data").value);if(ag.length>=LIMITE||ag.some(x=>x.horario===h))return;$("horario").value=h;renderSlots()}
-$("form").addEventListener("submit",e=>{
+async function selecionarHorario(h){const ag=await getData($("data").value);if(ag.length>=LIMITE||ag.some(x=>String(x.horario).slice(0,5)===h))return;$("horario").value=h;await renderSlots()}
+$("form").addEventListener("submit",async e=>{
  e.preventDefault();const d=$("data").value,h=$("horario").value;if(!d){showAlert("Selecione uma data.");return} const [y,m,day]=d.split("-").map(Number),dow=new Date(y,m-1,day).getDay(); if(dow===0||dow===6){showAlert("Os agendamentos funcionam somente de segunda a sexta-feira. Escolha um dia útil.");return} if(!h){showAlert("Selecione um horário antes de confirmar.");return}
- const ag=getData(d);if(ag.length>=LIMITE){showAlert("Este dia já atingiu o limite de 12 pessoas.");renderSlots();return}
- if(ag.some(x=>x.horario===h)){showAlert("Esse horário acabou de ser ocupado. Escolha outro.");renderSlots();return}
+ const ag=await getData(d);if(ag.length>=LIMITE){showAlert("Este dia já atingiu o limite de 12 pessoas.");await renderSlots();return}
+ if(ag.some(x=>String(x.horario).slice(0,5)===h)){showAlert("Esse horário acabou de ser ocupado. Escolha outro.");await renderSlots();return}
  const cpf=$("cpf").value.replace(/\D/g,"");if(cpf.length!==11){showAlert("Informe um CPF válido com 11 números.");return}
- if(cpfJaAgendado(cpf)){showAlert("Este CPF já possui um agendamento. Não é possível realizar um novo agendamento com o mesmo CPF.", "err", true);return}
- const item={id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),data:d,horario:h,nome:$("nome").value.trim(),cpf:$("cpf").value,nascimento:$("nascimento").value,telefone:$("telefone").value,servico:$("servico").value};
- ag.push(item);ag.sort((a,b)=>a.horario.localeCompare(b.horario));saveData(d,ag);
- $("ticket").innerHTML=`<b>Prefeitura Municipal de Anagé</b><br><b>Agendamento de RG</b><hr><b>Nome:</b> ${escapeHTML(item.nome)}<br><b>CPF:</b> ${escapeHTML(item.cpf)}<br><b>Data:</b> ${formatDate(item.data)}<br><b>Horário:</b> ${item.horario}<br><b>Serviço:</b> ${escapeHTML(item.servico)}<br><b>Telefone:</b> ${escapeHTML(item.telefone)}`;
- $("resultado").style.display="block";$("form").reset();$("data").value=d;$("horario").value="";showAlert("Agendamento realizado com sucesso!","ok");renderSlots();
+ if(await cpfJaAgendado(cpf)){showAlert("Este CPF já possui um agendamento. Não é possível realizar um novo agendamento com o mesmo CPF.","err",true);return}
+ const item={data:d,horario:h+":00",nome:$("nome").value.trim(),cpf:$("cpf").value,nascimento:$("nascimento").value,telefone:$("telefone").value,servico:$("servico").value};
+ const {data:inserted,error}=await db.from('agendamentos_rg').insert(item).select().single();
+ if(error){console.error(error);showAlert("Não foi possível salvar o agendamento. Tente novamente.");return}
+ const saved=inserted||item;
+ $("ticket").innerHTML=`<b>Prefeitura Municipal de Anagé</b><br><b>Agendamento de RG</b><hr><b>Nome:</b> ${escapeHTML(saved.nome)}<br><b>CPF:</b> ${escapeHTML(saved.cpf)}<br><b>Data:</b> ${formatDate(saved.data)}<br><b>Horário:</b> ${saved.horario.slice(0,5)}<br><b>Serviço:</b> ${escapeHTML(saved.servico)}<br><b>Telefone:</b> ${escapeHTML(saved.telefone)}`;
+ $("resultado").style.display="block";$("form").reset();$("data").value=d;$("horario").value="";showAlert("Agendamento realizado com sucesso!","ok");await renderSlots();
 });
 renderSlots();
 </script></body></html>
