@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel do Administrador — Agendamento de RG</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#222}
+header{background:#125ca8;color:#fff;padding:22px;text-align:center}
+main{max-width:1100px;margin:24px auto;padding:0 15px}
+.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 10px #0001;margin-bottom:18px}
+input,button{font:inherit}
+input{padding:11px;border:1px solid #ccd3da;border-radius:8px;box-sizing:border-box}
+button{padding:10px 14px;border:0;border-radius:8px;cursor:pointer}
+.primary{background:#125ca8;color:white}.danger{background:#b42318;color:white}.secondary{background:#e9eef3}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}
+table{width:100%;border-collapse:collapse;margin-top:15px;font-size:14px}
+th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+th{background:#f5f7fa}
+.alert{padding:11px;border-radius:8px;margin-top:12px;display:none}
+.err{display:block;background:#fdecec;color:#9b1c1c}
+.ok{display:block;background:#eaf8ef;color:#176b35}
+.hidden{display:none}
+.small{font-size:13px;color:#667085}
+</style>
+</head>
+<body>
+<header><h1>Painel do Administrador</h1><div>Agendamento de RG</div></header>
+<main>
+<section id="login" class="card">
+  <h2>Entrar</h2>
+  <div class="row">
+    <input id="usuario" placeholder="Usuário" autocomplete="username">
+    <input id="senha" type="password" placeholder="Senha" autocomplete="current-password">
+  </div>
+  <br><button class="primary" onclick="entrar()">ENTRAR</button>
+  <div id="loginAlert" class="alert"></div>
+</section>
+
+<section id="painel" class="hidden">
+  <div class="card">
+    <div class="row">
+      <div><h2 style="margin:0">Agendamentos</h2><p class="small">Selecione uma data para visualizar apenas os agendamentos daquele dia. Você também pode pesquisar por nome ou CPF.</p></div>
+      <div style="text-align:right"><button class="secondary" onclick="sair()">SAIR</button></div>
+    </div>
+    <div class="row">
+      <input id="filtro" placeholder="Pesquisar por nome ou CPF" oninput="render()">
+      <input id="dataFiltro" type="date" onchange="render()">
+      <button class="secondary" onclick="limparFiltro()">LIMPAR FILTROS</button>
+    </div>
+    <div id="alert" class="alert"></div>
+    <div id="resumo" style="margin-top:15px;font-weight:bold"></div><div id="resumoPrioridade" class="small" style="margin-top:6px"></div>
+    <div style="overflow:auto"><table>
+      <thead><tr><th>Nome</th><th>CPF</th><th>Data de nascimento</th><th>Telefone</th><th>Serviço</th><th>Tipo de vaga</th><th>Motivo da prioridade</th><th>Data</th><th>Horário</th><th>Ação</th></tr></thead>
+      <tbody id="lista"></tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <h3>Limpar todos os agendamentos</h3>
+    <p class="small">Use somente se realmente precisar apagar os dados deste navegador.</p>
+    <button class="danger" onclick="limparTudo()">APAGAR TODOS OS AGENDAMENTOS</button>
+  </div>
+</section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
+const SUPABASE_URL="https://qqydiczvfbgvstqdlcez.supabase.co";
+const SUPABASE_KEY="sb_publishable_P9rqskqf7h8emdjFgH8mMg_z_cVP06l";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const USUARIO="Admin";
+const SENHA="Nimba@82";
+const LIMITE=12;
+const LIMITE_NORMAL=10;
+const LIMITE_PRIORIDADE=2;
+
+function entrar(){
+  const u=document.getElementById("usuario").value;
+  const s=document.getElementById("senha").value;
+  const a=document.getElementById("loginAlert");
+  if(u===USUARIO && s===SENHA){
+    sessionStorage.setItem("admin_logado","1");
+    document.getElementById("login").classList.add("hidden");
+    document.getElementById("painel").classList.remove("hidden");
+    render();
+  }else{
+    a.textContent="Usuário ou senha incorretos.";
+    a.className="alert err";
+  }
+}
+function sair(){
+  sessionStorage.removeItem("admin_logado");
+  location.reload();
+}
+async function getData(d){const {data,error}=await db.from("agendamentos_rg").select("*").eq("data",d).order("horario");if(error){console.error(error);return []}return data||[]}
+async function allAppointments(){const {data,error}=await db.from("agendamentos_rg").select("*").order("data").order("horario");if(error){console.error(error);return []}return data||[]}
+function fmtDate(s){
+  if(!s)return "";
+  const [y,m,d]=s.split("-");
+  return d+"/"+m+"/"+y;
+}
+async function render(){
+  if(sessionStorage.getItem("admin_logado")!=="1")return;
+  const q=document.getElementById("filtro").value.toLowerCase().trim();
+  const df=document.getElementById("dataFiltro").value;
+  let arr=(await allAppointments()).filter(x=>{
+    const text=((x.nome||"")+" "+(x.cpf||"")).toLowerCase();
+    return (!q||text.includes(q)) && (!df||x.data===df);
+  });
+  const normais=arr.filter(x=>x.prioridade!==true).length,prioritarios=arr.filter(x=>x.prioridade===true).length;
+  document.getElementById("resumo").textContent=arr.length+" agendamento(s) encontrado(s).";
+  document.getElementById("resumoPrioridade").textContent="Vagas normais: "+normais+"/"+LIMITE_NORMAL+" • Vagas prioritárias: "+prioritarios+"/"+LIMITE_PRIORIDADE+" • Limite total: "+LIMITE;
+  document.getElementById("lista").innerHTML=arr.map(x=>`
+    <tr>
+      <td>${esc(x.nome)}</td><td>${esc(x.cpf)}</td><td>${fmtDate(x.nascimento)}</td>
+      <td>${esc(x.telefone)}</td><td>${esc(x.servico)}</td>
+      <td><b>${x.prioridade===true?"PRIORITÁRIO":"NORMAL"}</b></td><td>${x.prioridade===true?esc(x.prioridade_motivo||""):"—"}</td>
+      <td>${fmtDate(x.data)}</td><td>${String(x.horario||"").slice(0,5)}</td>
+      <td><button class="danger" onclick="excluir('${escAttr(x.data)}','${escAttr(x.id)}')">EXCLUIR</button></td>
+    </tr>`).join("") || '<tr><td colspan="10">Nenhum agendamento encontrado.</td></tr>';
+}
+async function excluir(data,id){
+  if(!confirm("Excluir este agendamento?"))return;
+  const {error}=await db.from("agendamentos_rg").delete().eq("id",id);
+  if(error){aviso("Não foi possível excluir.","err");console.error(error);return;}
+  aviso("Agendamento excluído.","ok"); render();
+}
+async function limparTudo(){
+  if(!confirm("ATENÇÃO: isso apagará TODOS os agendamentos do sistema. Continuar?"))return;
+  const {error}=await db.from("agendamentos_rg").delete().not("id","is",null);
+  if(error){aviso("Não foi possível apagar os agendamentos.","err");console.error(error);return;}
+  aviso("Todos os agendamentos foram apagados.","ok"); render();
+}
+function limparFiltro(){
+  document.getElementById("filtro").value="";
+  document.getElementById("dataFiltro").value="";
+  render();
+}
+function aviso(msg,type){
+  const a=document.getElementById("alert");a.textContent=msg;a.className="alert "+type;
+  setTimeout(()=>a.className="alert",3500);
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function escAttr(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
+if(sessionStorage.getItem("admin_logado")==="1"){
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("painel").classList.remove("hidden");
+  render();
+}
+</script>
+</body>
+</html>
